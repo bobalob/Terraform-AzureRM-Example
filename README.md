@@ -2,28 +2,27 @@
 
 Quick Instruction:
 
-* Download and install Terraform
-
+Download and install Terraform
 https://www.terraform.io/downloads.html
 
-* Edit the TerraformCredentials.ps1 and enter API keys
+Edit the TerraformCredentials.ps1 and enter API keys
 
-* Load Powershell
+Load Powershell
 
-* "dot source" the credentials to load them into environment variables
+"dot source" the credentials to load them into environment variables
 
-    . .\TerraformCredentials.ps1
+      . .\TerraformCredentials.ps1
 
-* Test the configuration
+Test the configuration
 
-    terraform plan
+      terraform plan
 
-* Build the resources
+Build the resources
 
-    terraform apply
+      terraform apply
 
-* Delete the resources
+Delete the resources
 
-    terraform destroy
+      terraform destroy
 
-    
+
