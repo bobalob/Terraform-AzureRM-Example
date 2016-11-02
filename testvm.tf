@@ -14,6 +14,7 @@ resource "azurerm_network_interface" "testnic" {
     name = "testvm1nic"
     location = "North Europe"
     resource_group_name = "${azurerm_resource_group.pipelineResources.name}"
+    network_security_group_id = "${azurerm_network_security_group.testvm1SecurityGroup.id}"
 
     ip_configuration {
         name = "testconfiguration1"
@@ -49,7 +50,7 @@ resource "azurerm_virtual_machine" "testvm1" {
     os_profile {
         computer_name = "testvm1"
         admin_username = "TestAdmin"
-        admin_password = "c8920f35ny84950n7"
+        admin_password = "c8:G920f35Gny!50n7"
     }
 
     tags {
