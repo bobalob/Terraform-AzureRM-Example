@@ -25,4 +25,8 @@ Delete the resources
 
       terraform destroy
 
+Information
 
+http://superautomation.blogspot.co.uk/2016/11/terraform-with-azure-resource-manager.html
+http://superautomation.blogspot.co.uk/2016/11/configuring-terraform-to-use-winrm-over.html
+http://superautomation.blogspot.co.uk/2016/11/azure-resource-manager-load-balancer.html
