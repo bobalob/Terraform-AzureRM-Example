@@ -1,17 +1,3 @@
-
-#resource "azurerm_public_ip" "vm_public_ip" {
-#    name = "${var.vm_name_prefix}-${count.index}-ip"
-#    location = "${var.azure_region_fullname}"
-#    resource_group_name = "${azurerm_resource_group.resource_group.name}"
-#    public_ip_address_allocation = "dynamic"
-#    domain_name_label = "${var.vm_name_prefix}-${count.index}"
-#    count = "${var.vm_count}"
-#
-#    tags {
-#        environment = "${var.environment_tag}"
-#    }
-#}
-
 resource "azurerm_lb_nat_rule" "winrm_nat" {
   location = "${var.azure_region_fullname}"
   resource_group_name = "${azurerm_resource_group.resource_group.name}"
@@ -48,10 +34,8 @@ resource "azurerm_network_interface" "vm_nic" {
         name = "${var.vm_name_prefix}-${count.index}-ipConfig"
         subnet_id = "${azurerm_subnet.subnet1.id}"
         private_ip_address_allocation = "dynamic"
-        #public_ip_address_id = "${element(azurerm_public_ip.vm_public_ip.*.id, count.index)}"
         load_balancer_backend_address_pools_ids = ["${azurerm_lb_backend_address_pool.backend_pool.id}"]
         load_balancer_inbound_nat_rules_ids = ["${element(azurerm_lb_nat_rule.winrm_nat.*.id, count.index)}"]
-        #, "${element(azurerm_lb_nat_rule.rdp_nat.*.id, count.index)}"
     }
 
     tags {
