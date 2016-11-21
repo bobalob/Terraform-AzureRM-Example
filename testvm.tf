@@ -1,27 +1,57 @@
 
-resource "azurerm_public_ip" "vm_public_ip" {
-    name = "${var.vm_name}-ip"
-    location = "${var.azure_region_fullname}"
-    resource_group_name = "${azurerm_resource_group.resource_group.name}"
-    public_ip_address_allocation = "dynamic"
-    domain_name_label = "${var.vm_name}"
+#resource "azurerm_public_ip" "vm_public_ip" {
+#    name = "${var.vm_name_prefix}-${count.index}-ip"
+#    location = "${var.azure_region_fullname}"
+#    resource_group_name = "${azurerm_resource_group.resource_group.name}"
+#    public_ip_address_allocation = "dynamic"
+#    domain_name_label = "${var.vm_name_prefix}-${count.index}"
+#    count = "${var.vm_count}"
+#
+#    tags {
+#        environment = "${var.environment_tag}"
+#    }
+#}
 
-    tags {
-        environment = "${var.environment_tag}"
-    }
+resource "azurerm_lb_nat_rule" "winrm_nat" {
+  location = "${var.azure_region_fullname}"
+  resource_group_name = "${azurerm_resource_group.resource_group.name}"
+  loadbalancer_id = "${azurerm_lb.load_balancer.id}"
+  name = "WinRM-HTTPS-vm-${count.index}"
+  protocol = "Tcp"
+  frontend_port = "${count.index + 10000}"
+  backend_port = "${var.vm_winrm_port}"
+  frontend_ip_configuration_name = "${var.vm_name_prefix}-ipconfig"
+  count = "${var.vm_count}"
 }
 
+resource "azurerm_lb_nat_rule" "rdp_nat" {
+  location = "${var.azure_region_fullname}"
+  resource_group_name = "${azurerm_resource_group.resource_group.name}"
+  loadbalancer_id = "${azurerm_lb.load_balancer.id}"
+  name = "RDP-vm-${count.index}"
+  protocol = "Tcp"
+  frontend_port = "${count.index + 11000}"
+  backend_port = "3389"
+  frontend_ip_configuration_name = "${var.vm_name_prefix}-ipconfig"
+  count = "${var.vm_count}"
+}
+
+
 resource "azurerm_network_interface" "vm_nic" {
-    name = "${var.vm_name}-nic"
+    name = "${var.vm_name_prefix}-${count.index}-nic"
     location = "${var.azure_region_fullname}"
     resource_group_name = "${azurerm_resource_group.resource_group.name}"
     network_security_group_id = "${azurerm_network_security_group.vm_security_group.id}"
+    count = "${var.vm_count}"
 
     ip_configuration {
-        name = "${var.vm_name}-ipConfig"
+        name = "${var.vm_name_prefix}-${count.index}-ipConfig"
         subnet_id = "${azurerm_subnet.subnet1.id}"
         private_ip_address_allocation = "dynamic"
-        public_ip_address_id = "${azurerm_public_ip.vm_public_ip.id}"
+        #public_ip_address_id = "${element(azurerm_public_ip.vm_public_ip.*.id, count.index)}"
+        load_balancer_backend_address_pools_ids = ["${azurerm_lb_backend_address_pool.backend_pool.id}"]
+        load_balancer_inbound_nat_rules_ids = ["${element(azurerm_lb_nat_rule.winrm_nat.*.id, count.index)}"]
+        #, "${element(azurerm_lb_nat_rule.rdp_nat.*.id, count.index)}"
     }
 
     tags {
@@ -30,11 +60,15 @@ resource "azurerm_network_interface" "vm_nic" {
 }
 
 resource "azurerm_virtual_machine" "virtual_machine" {
-    name = "${var.vm_name}"
+    name = "${var.vm_name_prefix}-${count.index}"
     location = "${var.azure_region_fullname}"
     resource_group_name = "${azurerm_resource_group.resource_group.name}"
-    network_interface_ids = ["${azurerm_network_interface.vm_nic.id}"]
+    network_interface_ids = ["${element(azurerm_network_interface.vm_nic.*.id, count.index)}"]
     vm_size = "${var.vm_size}"
+    count = "${var.vm_count}"
+    availability_set_id = "${azurerm_availability_set.availability_set.id}"
+    delete_os_disk_on_termination = true
+    delete_data_disks_on_termination = true
 
     storage_image_reference {
         publisher = "MicrosoftWindowsServer"
@@ -44,19 +78,19 @@ resource "azurerm_virtual_machine" "virtual_machine" {
     }
 
     storage_os_disk {
-        name = "${var.vm_name}-osdisk"
-        vhd_uri = "${azurerm_storage_account.storage_account.primary_blob_endpoint}${azurerm_storage_container.container.name}/${var.vm_name}-osdisk.vhd"
+        name = "${var.vm_name_prefix}-${count.index}-osdisk"
+        vhd_uri = "${azurerm_storage_account.storage_account.primary_blob_endpoint}${azurerm_storage_container.container.name}/${var.vm_name_prefix}-${count.index}-osdisk.vhd"
         caching = "ReadWrite"
         create_option = "FromImage"
     }
 
     os_profile {
-        computer_name = "${var.vm_name}"
+        computer_name = "${var.vm_name_prefix}-${count.index}"
         admin_username = "${var.admin_username}"
         admin_password = "${var.admin_password}"
         #Include Deploy.PS1 with variables injected as custom_data
-        custom_data = "${base64encode("Param($RemoteHostName = \"${null_resource.intermediates.triggers.full_vm_dns_name}\", $ComputerName = \"${var.vm_name}\", $WinRmPort = ${var.vm_winrm_port}) ${file("Deploy.PS1")}")}"
-    }
+        custom_data = "${base64encode("Param($RemoteHostName = \"${var.vm_name_prefix}-${count.index}.${var.azure_region}.${var.azure_dns_suffix}\", $ComputerName = \"${var.vm_name_prefix}-${count.index}\", $WinRmPort = ${var.vm_winrm_port}) ${file("Deploy.PS1")}")}"
+     }
 
     tags {
         environment = "${var.environment_tag}"
@@ -82,31 +116,46 @@ resource "azurerm_virtual_machine" "virtual_machine" {
     } 
 
     provisioner "file" {
-        source = "Test.PS1"
-        destination = "C:\\Scripts\\Test.PS1"
+        source = "WebserverDsc.PS1"
+        destination = "C:\\Scripts\\WebserverDsc.PS1"
         connection {
             type = "winrm"
             https = true
             insecure = true
             user = "${var.admin_username}"
             password = "${var.admin_password}"
-            host = "${null_resource.intermediates.triggers.full_vm_dns_name}"
-            port = "${var.vm_winrm_port}"
+            host = "${azurerm_resource_group.resource_group.name}.${var.azure_region}.${var.azure_dns_suffix}"
+            port = "${count.index + 10000}"
+        }
+    }
+
+    provisioner "file" {
+        content = "${var.vm_name_prefix}-${count.index}"
+        destination = "C:\\inetpub\\wwwroot\\default.htm"
+        connection {
+            type = "winrm"
+            https = true
+            insecure = true
+            user = "${var.admin_username}"
+            password = "${var.admin_password}"
+            host = "${azurerm_resource_group.resource_group.name}.${var.azure_region}.${var.azure_dns_suffix}"
+            port = "${count.index + 10000}"
         }
     }
 
     provisioner "remote-exec" {
       inline = [
-        "powershell.exe -sta -ExecutionPolicy Unrestricted -file C:\\Scripts\\Test.ps1",
+        "powershell.exe -sta -ExecutionPolicy Unrestricted -file C:\\Scripts\\WebserverDsc.ps1",
       ]
         connection {
             type = "winrm"
+            timeout = "20m"
             https = true
             insecure = true
             user = "${var.admin_username}"
             password = "${var.admin_password}"
-            host = "${null_resource.intermediates.triggers.full_vm_dns_name}"
-            port = "${var.vm_winrm_port}"
+            host = "${azurerm_resource_group.resource_group.name}.${var.azure_region}.${var.azure_dns_suffix}"
+            port = "${count.index + 10000}"
         }
     }
 
@@ -117,3 +166,4 @@ resource "azurerm_virtual_machine" "virtual_machine" {
 # Get-AzureRmVMImagePublisher -Location "North Europe" | ? {$_.PublisherName -match "MicrosoftWindows"}
 # Get-AzureRmVMImageOffer -Location "North Europe" -PublisherName "MicrosoftWindowsServer"
 # Get-AzureRmVMImageSku -Location "North Europe" -PublisherName "MicrosoftWindowsServer" -Offer "WindowsServer"
+# Get-AzureRmVMImage -Location "North Europe" -PublisherName "MicrosoftWindowsServer" -Offer "WindowsServer" -Skus "2016-Nano-Server"

@@ -1,16 +1,22 @@
 variable "azure_resource_group_name" {
     description = "Resource Group Name"
-    default = "awesomegroup"
+    default = "ninjagroup"
 }
 
-variable "vm_name" { 
+variable "vm_name_prefix" { 
 	description = "The Virtual Machine Name"
-    default = "davetestvm3"
+    default = "ninjatestvm"
 }
 
+variable "vm_count" {
+    description = "Number of VMs to create"
+    default = "2"
+}
+
+#Re-applying a new size reboots the VMs and re-runs the provisioner scripts - Use DSC Push to configure to avoid errors
 variable "vm_size" { 
 	description = "Azure VM Size"
-    default = "Basic_A2"
+    default = "Standard_A1"
 }
 
 variable "vm_winrm_port" {
@@ -49,12 +55,13 @@ variable "environment_tag" {
 }
 
 #Null resource to make the VM intermediate varable - probably not the right way to do this
-resource "null_resource" "intermediates" {
-    triggers = {
-        full_vm_dns_name = "${var.vm_name}.${var.azure_region}.${var.azure_dns_suffix}"
-    }
-}
+#resource "null_resource" "intermediates" {
+#    triggers = {
+#        full_vm_dns_name = "Param($RemoteHostName = \"${var.vm_name_prefix}-1.${var.azure_region}.${var.azure_dns_suffix}\", $ComputerName = \"${var.vm_name_prefix}-1\", $WinRmPort = ${var.vm_winrm_port}) ${file("Deploy.PS1")}"
+#        #full_vm_dns_name = "Param($RemoteHostName = \"${null_resource.intermediates.triggers.full_vm_dns_name}\", $ComputerName = \"${var.vm_name}\", $WinRmPort = ${var.vm_winrm_port}) ${file("Deploy.PS1")}"
+#    }
+#}
 
-output "full_vm_dns_name" {
-    value = "${null_resource.intermediates.triggers.full_vm_dns_name}"
-}
+#output "full_vm_dns_name" {
+#    value = "${null_resource.intermediates.triggers.full_vm_dns_name}"
+#}
